@@ -26,6 +26,7 @@ if __name__ == '__main__':
 
     parser = ArgumentParser()
     parser.add_argument('--root', type=str, required=True)
+    parser.add_argument('--ckpt_path', type=str, required=True)
     parser.add_argument('--train_batch_size', type=int, required=True)
     parser.add_argument('--val_batch_size', type=int, required=True)
     parser.add_argument('--test_batch_size', type=int, required=True)
@@ -49,7 +50,12 @@ if __name__ == '__main__':
     datamodule = {
         'argoverse_v2': ArgoverseV2DataModule,
     }[args.dataset](**vars(args))
-    model_checkpoint = ModelCheckpoint(monitor='val_minFDE', save_top_k=5, mode='min')
+    model_checkpoint = ModelCheckpoint(
+            dirpath=args.ckpt_path,
+            filename='{epoch}-{val_minFDE:.2f}',
+            monitor='val_minFDE', 
+            save_top_k=5, 
+            mode='min')
     lr_monitor = LearningRateMonitor(logging_interval='epoch')
     trainer = pl.Trainer(accelerator=args.accelerator, devices=args.devices,
                          strategy=DDPStrategy(find_unused_parameters=False, gradient_as_bucket_view=True),

@@ -27,6 +27,8 @@ class ArgoverseV2DataModule(pl.LightningDataModule):
                  train_batch_size: int,
                  val_batch_size: int,
                  test_batch_size: int,
+                 num_historical_steps: int,
+                 num_future_steps: int,
                  shuffle: bool = True,
                  num_workers: int = 0,
                  pin_memory: bool = True,
@@ -37,8 +39,8 @@ class ArgoverseV2DataModule(pl.LightningDataModule):
                  train_processed_dir: Optional[str] = None,
                  val_processed_dir: Optional[str] = None,
                  test_processed_dir: Optional[str] = None,
-                 train_transform: Optional[Callable] = TargetBuilder(50, 60),
-                 val_transform: Optional[Callable] = TargetBuilder(50, 60),
+                 train_transform: Optional[Callable] = TargetBuilder(10, 30),
+                 val_transform: Optional[Callable] = TargetBuilder(10, 30),
                  test_transform: Optional[Callable] = None,
                  **kwargs) -> None:
         super(ArgoverseV2DataModule, self).__init__()
@@ -60,18 +62,21 @@ class ArgoverseV2DataModule(pl.LightningDataModule):
         self.val_transform = val_transform
         self.test_transform = test_transform
 
+        self.num_historical_steps = num_historical_steps
+        self.num_future_steps = num_future_steps
+
     def prepare_data(self) -> None:
-        ArgoverseV2Dataset(self.root, 'train', self.train_raw_dir, self.train_processed_dir, self.train_transform)
-        ArgoverseV2Dataset(self.root, 'val', self.val_raw_dir, self.val_processed_dir, self.val_transform)
-        ArgoverseV2Dataset(self.root, 'test', self.test_raw_dir, self.test_processed_dir, self.test_transform)
+        ArgoverseV2Dataset(self.root, 'train', self.train_raw_dir, self.train_processed_dir, self.train_transform, num_historical_steps=self.num_historical_steps, num_future_steps=self.num_future_steps)
+        ArgoverseV2Dataset(self.root, 'val', self.val_raw_dir, self.val_processed_dir, self.val_transform, num_historical_steps=self.num_historical_steps, num_future_steps=self.num_future_steps)
+        ArgoverseV2Dataset(self.root, 'test', self.test_raw_dir, self.test_processed_dir, self.test_transform, num_historical_steps=self.num_historical_steps, num_future_steps=self.num_future_steps)
 
     def setup(self, stage: Optional[str] = None) -> None:
         self.train_dataset = ArgoverseV2Dataset(self.root, 'train', self.train_raw_dir, self.train_processed_dir,
-                                                self.train_transform)
+                                                self.train_transform, num_historical_steps=self.num_historical_steps, num_future_steps=self.num_future_steps)
         self.val_dataset = ArgoverseV2Dataset(self.root, 'val', self.val_raw_dir, self.val_processed_dir,
-                                              self.val_transform)
+                                              self.val_transform, num_historical_steps=self.num_historical_steps, num_future_steps=self.num_future_steps)
         self.test_dataset = ArgoverseV2Dataset(self.root, 'test', self.test_raw_dir, self.test_processed_dir,
-                                               self.test_transform)
+                                               self.test_transform, num_historical_steps=self.num_historical_steps, num_future_steps=self.num_future_steps)
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset, batch_size=self.train_batch_size, shuffle=self.shuffle,

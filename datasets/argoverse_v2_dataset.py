@@ -31,16 +31,11 @@ from tqdm import tqdm
 from utils import safe_list_index
 from utils import side_to_directed_lineseg
 
-try:
-    from av2.geometry.interpolate import compute_midpoint_line
-    from av2.map.map_api import ArgoverseStaticMap
-    from av2.map.map_primitives import Polyline
-    from av2.utils.io import read_json_file
-except ImportError:
-    compute_midpoint_line = object
-    ArgoverseStaticMap = object
-    Polyline = object
-    read_json_file = object
+
+from av2.geometry.interpolate import compute_midpoint_line
+from av2.map.map_api import ArgoverseStaticMap
+from av2.map.map_primitives import Polyline
+from av2.utils.io import read_json_file
 
 
 class ArgoverseV2Dataset(Dataset):
@@ -77,8 +72,8 @@ class ArgoverseV2Dataset(Dataset):
                  processed_dir: Optional[str] = None,
                  transform: Optional[Callable] = None,
                  dim: int = 3,
-                 num_historical_steps: int = 50,
-                 num_future_steps: int = 60,
+                 num_historical_steps: int = 10,
+                 num_future_steps: int = 30,
                  predict_unseen_agents: bool = False,
                  vector_repr: bool = True) -> None:
         root = os.path.expanduser(os.path.normpath(root))
@@ -131,11 +126,6 @@ class ArgoverseV2Dataset(Dataset):
         self.predict_unseen_agents = predict_unseen_agents
         self.vector_repr = vector_repr
         self._url = f'https://s3.amazonaws.com/argoverse/datasets/av2/tars/motion-forecasting/{split}.tar'
-        self._num_samples = {
-            'train': 199908,
-            'val': 24988,
-            'test': 24984,
-        }[split]
         self._agent_types = ['vehicle', 'pedestrian', 'motorcyclist', 'cyclist', 'bus', 'static', 'background',
                              'construction', 'riderless_bicycle', 'unknown']
         self._agent_categories = ['TRACK_FRAGMENT', 'UNSCORED_TRACK', 'SCORED_TRACK', 'FOCAL_TRACK']
@@ -215,7 +205,8 @@ class ArgoverseV2Dataset(Dataset):
             agent_ids = list(df['track_id'].unique())
 
         num_agents = len(agent_ids)
-        av_idx = agent_ids.index('AV')
+        # av_idx = agent_ids.index('AV')
+        av_idx = 5000
 
         # initialization
         valid_mask = torch.zeros(num_agents, self.num_steps, dtype=torch.bool)
@@ -244,8 +235,9 @@ class ArgoverseV2Dataset(Dataset):
             if not current_valid_mask[agent_idx]:
                 predict_mask[agent_idx, self.num_historical_steps:] = False
 
-            agent_id[agent_idx] = track_id
-            agent_type[agent_idx] = self._agent_types.index(track_df['object_type'].values[0])
+            agent_id[agent_idx] = track_id 
+            # agent_type[agent_idx] = self._agent_types.index(track_df['object_type'].values[0]) # original code
+            agent_type[agent_idx] = self._agent_types.index(track_df['object_type'].values[0].lower()) # changed code
             agent_category[agent_idx] = track_df['object_category'].values[0]
             position[agent_idx, agent_steps, :2] = torch.from_numpy(np.stack([track_df['position_x'].values,
                                                                               track_df['position_y'].values],
@@ -504,7 +496,7 @@ class ArgoverseV2Dataset(Dataset):
         return map_data
 
     def len(self) -> int:
-        return self._num_samples
+        return len(self._processed_file_names)
 
     def get(self, idx: int) -> HeteroData:
         with open(self.processed_paths[idx], 'rb') as handle:
@@ -516,7 +508,7 @@ class ArgoverseV2Dataset(Dataset):
                 (os.path.isdir(self.processed_dir) and len(self.processed_file_names) == len(self))):
             return
         self._processed_file_names = []
-        self.download()
+        # self.download()
 
     def _process(self) -> None:
         # if complete processed files exist, skip processing
