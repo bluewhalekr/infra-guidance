@@ -1,5 +1,40 @@
 import os
 import shutil
+import argparse
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="")
+    parser.add_argument(
+        "--src_dir",
+        type=str,
+        default=None,
+        required=True,
+        help="Path to source directory.",
+    )
+
+    parser.add_argument(
+        "--dst_dir",
+        type=str,
+        default=None,
+        required=True,
+        help="Path to destination directory.",
+    )
+    parser.add_argument(
+        "--use_case",
+        type=str,
+        nargs='+',
+        default=["A1", "B1", "C1", "D3", "D4"],
+        required=False,
+        help="Use Case for train / validation dataset",
+    )
+    parser.add_argument(
+        "--mode",
+        action='store_true',
+        required=False,
+        help="If mode is true, run the train/validation process else run the test process.",
+    )
+    args = parser.parse_args()
+    return args
 
 def copy_json_to_subfolders_with_new_name(source_file_path, dest_folder):
     # 대상 폴더의 모든 하위 폴더 목록을 가져오기
@@ -13,23 +48,18 @@ def copy_json_to_subfolders_with_new_name(source_file_path, dest_folder):
         shutil.copyfile(source_file_path, dest_file_path)
         print(f"Copied {source_file_path} to {dest_file_path}")
 
-# use_case = ["A1", "B1", "C1", "D3", "D4"]
-use_case = ["A1", "B1", "D3"]
+if __name__=="__main__":
+    args = parse_args()
 
-src_path = '/noah/dataset/infra-guidance/SUMO/sumo_origin'
-dst_path = '/noah/dataset/infra-guidance/SUMO/sumo_process'
+    for uc in args.use_case:
+        source_file_path = os.path.join(args.src_dir, '{}/{}_map.json'.format(uc,uc))
 
-for uc in use_case:
-    # 소스 파일 경로와 대상 폴더 지정
-    source_file_path = os.path.join(src_path, '{}/{}_map.json'.format(uc,uc))
+        if args.mode:
+            train_dest_folder = os.path.join(args.dst_dir,'{}/train/raw'.format(uc))
+            copy_json_to_subfolders_with_new_name(source_file_path, train_dest_folder)
 
-    # # train 폴더에 대해 JSON 파일을 복사하며 새로운 이름으로 저장
-    # train_dest_folder = os.path.join(dst_path,'{}/train/raw'.format(uc))
-    # copy_json_to_subfolders_with_new_name(source_file_path, train_dest_folder)
-
-    # # val 폴더에 대해 JSON 파일을 복사하며 새로운 이름으로 저장
-    # val_dest_folder = os.path.join(dst_path,'{}/val/raw'.format(uc))
-    # copy_json_to_subfolders_with_new_name(source_file_path, val_dest_folder)
-
-    test_dest_folder = os.path.join(dst_path,'{}/test/raw'.format(uc))
-    copy_json_to_subfolders_with_new_name(source_file_path, test_dest_folder)
+            val_dest_folder = os.path.join(args.dst_dir,'{}/val/raw'.format(uc))
+            copy_json_to_subfolders_with_new_name(source_file_path, val_dest_folder)
+        else:
+            test_dest_folder = os.path.join(args.dst_dir,'{}/test/raw'.format(uc))
+            copy_json_to_subfolders_with_new_name(source_file_path, test_dest_folder)

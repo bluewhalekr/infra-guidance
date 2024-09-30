@@ -3,6 +3,7 @@ import pandas as pd
 import shutil
 from tqdm import tqdm
 from datetime import date
+import argparse
 
 def process_files(folder_path, output_folder, input_frame, output_frame):
     # 파일 처리 함수 호출
@@ -121,29 +122,70 @@ def convert_csv_to_parquet(folder_path):
                     df.to_parquet(parquet_file_path)
                     os.remove(csv_file_path)
 
-# 설정값 정의
-input_frame = 10
-output_frame = 30  # hz
-# use_case = ["A1", "B1", "C1", "D3", "D4"]
-use_case = ["A1", "B1", "D3"]
-src_path = '/noah/dataset/infra-guidance/SUMO/sumo_origin'
-dst_path = '/noah/dataset/infra-guidance/SUMO/sumo_process'
 
-for uc in use_case:
-    # train_input_folder = os.path.join(src_path, uc, 'TRAIN')
-    # val_input_folder = os.path.join(src_path, uc, 'VALI')
-    test_input_folder = os.path.join(src_path, uc, 'TEST')
-    
-    # 출력 폴더 생성
-    # train_output_folder = generate_folder_path(os.path.join(dst_path, '{}/train/raw'.format(uc)), input_frame, output_frame)
-    # val_output_folder = generate_folder_path(os.path.join(dst_path, '{}/val/raw'.format(uc)), input_frame, output_frame)
-    test_output_folder = generate_folder_path(os.path.join(dst_path, '{}/test/raw'.format(uc)), input_frame, output_frame)
+def parse_args():
+    parser = argparse.ArgumentParser(description="")
+    parser.add_argument(
+        "--src_dir",
+        type=str,
+        default=None,
+        required=True,
+        help="Path to source directory.",
+    )
 
-    # 파일 처리 및 CSV -> Parquet 변환
-    # process_files(train_input_folder, train_output_folder, input_frame, output_frame)
-    # process_files(val_input_folder, val_output_folder, input_frame, output_frame)
-    process_files(test_input_folder, test_output_folder, input_frame, output_frame)
+    parser.add_argument(
+        "--dst_dir",
+        type=str,
+        default=None,
+        required=True,
+        help="Path to destination directory.",
+    )
+    parser.add_argument(
+        "--use_case",
+        type=str,
+        nargs='+',
+        default=["A1", "B1", "C1", "D3", "D4"],
+        required=False,
+        help="Use Case for train / validation dataset",
+    )
+    parser.add_argument(
+        "--mode",
+        action='store_true',
+        required=False,
+        help="If mode is true, run the train/validation process else run the test process.",
+    )
+    parser.add_argument(
+        "--input_frame",
+        type=int,
+        default=10,
+        required=False,
+        help="The input frame numbers.",
+    )
+    parser.add_argument(
+        "--output_frame",
+        type=int,
+        default=30,
+        required=False,
+        help="The output frame numbers.",
+    )
+    args = parser.parse_args()
+    return args
 
-    # convert_csv_to_parquet(train_output_folder)
-    # convert_csv_to_parquet(val_output_folder)
-    convert_csv_to_parquet(test_output_folder)
+if __name__=="__main__":
+    args = parse_args()
+
+    for uc in args.use_case:
+        if args.mode:
+            train_input_folder = os.path.join(args.src_dir, uc, 'TRAIN')
+            val_input_folder = os.path.join(args.src_dir, uc, 'VALI')
+            train_output_folder = generate_folder_path(os.path.join(args.dst_dir, '{}/train/raw'.format(uc)), args.input_frame, args.output_frame)
+            val_output_folder = generate_folder_path(os.path.join(args.dst_dir, '{}/val/raw'.format(uc)), args.input_frame, args.output_frame)
+            process_files(train_input_folder, train_output_folder, args.input_frame, args.output_frame)
+            process_files(val_input_folder, val_output_folder, args.input_frame, args.output_frame)
+            convert_csv_to_parquet(train_output_folder)
+            convert_csv_to_parquet(val_output_folder)
+        else:
+            test_input_folder = os.path.join(src_path, uc, 'TEST')
+            test_output_folder = generate_folder_path(os.path.join(args.dst_dir, '{}/test/raw'.format(uc)), args.input_frame, args.output_frame)
+            process_files(test_input_folder, test_output_folder, args.input_frame, args.output_frame)
+            convert_csv_to_parquet(test_output_folder)
