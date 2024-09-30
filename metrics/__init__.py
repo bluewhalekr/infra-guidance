@@ -17,5 +17,7 @@ from metrics.min_ade import minADE
 from metrics.min_ahe import minAHE
 from metrics.min_fde import minFDE
 from metrics.min_fhe import minFHE
+from metrics.rmse_x import RMSEX
+from metrics.rmse_y import RMSEY
 from metrics.mr import MR
 from metrics.prob_mr import ProbMR

@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import numpy as np
 from itertools import chain
 from itertools import compress
 from pathlib import Path
@@ -31,6 +32,8 @@ from metrics import minADE
 from metrics import minAHE
 from metrics import minFDE
 from metrics import minFHE
+from metrics import RMSEX
+from metrics import RMSEY
 from modules import QCNetDecoder
 from modules import QCNetEncoder
 
@@ -144,14 +147,38 @@ class QCNet(pl.LightningModule):
         self.cls_loss = MixtureNLLLoss(component_distribution=['laplace'] * output_dim + ['von_mises'] * output_head,
                                        reduction='none')
 
+        # # k=6
         self.Brier = Brier(max_guesses=6)
         self.minADE = minADE(max_guesses=6)
         self.minAHE = minAHE(max_guesses=6)
         self.minFDE = minFDE(max_guesses=6)
         self.minFHE = minFHE(max_guesses=6)
         self.MR = MR(max_guesses=6)
-
+        self.RMSEX = RMSEX(max_guesses=6)
+        self.RMSEY = RMSEY(max_guesses=6)
+        # self.avg_RMSE_X = None
+        # self.avg_RMSE_Y = None
+        # self.total_MSE_X = 0
+        # self.total_MSE_Y = 0
+        # self.count = 0
+        # # k=1
+        # self.Brier = Brier(max_guesses=1)
+        # self.minADE = minADE(max_guesses=1)
+        # self.minAHE = minAHE(max_guesses=1)
+        # self.minFDE = minFDE(max_guesses=1)
+        # self.minFHE = minFHE(max_guesses=1)
+        # self.MR = MR(max_guesses=1)
+        
+        # self.avg_RMSE_X = None
+        # self.avg_RMSE_Y = None
+        # self.total_MSE_X = 0
+        # self.total_MSE_Y = 0
+        # self.count = 0
+        
+        # self.validation_metrics = []
+        
         self.test_predictions = dict()
+        
 
     def forward(self, data: HeteroData):
         scene_enc = self.encoder(data)
@@ -214,6 +241,7 @@ class QCNet(pl.LightningModule):
         reg_mask = data['agent']['predict_mask'][:, self.num_historical_steps:]
         cls_mask = data['agent']['predict_mask'][:, -1]
         pred = self(data)
+        # print(f"keys of original prediction : {pred.keys()}")
         if self.output_head:
             traj_propose = torch.cat([pred['loc_propose_pos'][..., :self.output_dim],
                                       pred['loc_propose_head'],
@@ -230,8 +258,9 @@ class QCNet(pl.LightningModule):
                                      pred['scale_refine_pos'][..., :self.output_dim]], dim=-1)
         pi = pred['pi']
         gt = torch.cat([data['agent']['target'][..., :self.output_dim], data['agent']['target'][..., -1:]], dim=-1)
+
         l2_norm = (torch.norm(traj_propose[..., :self.output_dim] -
-                              gt[..., :self.output_dim].unsqueeze(1), p=2, dim=-1) * reg_mask.unsqueeze(1)).sum(dim=-1)
+        gt[..., :self.output_dim].unsqueeze(1), p=2, dim=-1) * reg_mask.unsqueeze(1)).sum(dim=-1)
         best_mode = l2_norm.argmin(dim=-1)
         traj_propose_best = traj_propose[torch.arange(traj_propose.size(0)), best_mode]
         traj_refine_best = traj_refine[torch.arange(traj_refine.size(0)), best_mode]
@@ -254,7 +283,7 @@ class QCNet(pl.LightningModule):
                  sync_dist=True)
         self.log('val_cls_loss', cls_loss, prog_bar=True, on_step=False, on_epoch=True, batch_size=1, sync_dist=True)
 
-        if self.dataset == 'argoverse_v2':
+        if self.dataset == 'argoverse_v2' or self.dataset == 'argoverse_v2_ACL':
             eval_mask = data['agent']['category'] == 3
         else:
             raise ValueError('{} is not a valid dataset'.format(self.dataset))
@@ -279,12 +308,30 @@ class QCNet(pl.LightningModule):
         self.minFHE.update(pred=traj_eval, target=gt_eval, prob=pi_eval, valid_mask=valid_mask_eval)
         self.MR.update(pred=traj_eval[..., :self.output_dim], target=gt_eval[..., :self.output_dim], prob=pi_eval,
                        valid_mask=valid_mask_eval)
+        self.RMSEX.update(pred=traj_eval, target=gt_eval, prob=pi_eval, valid_mask=valid_mask_eval)
+        self.RMSEY.update(pred=traj_eval, target=gt_eval, prob=pi_eval, valid_mask=valid_mask_eval)
         self.log('val_Brier', self.Brier, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
         self.log('val_minADE', self.minADE, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
         self.log('val_minAHE', self.minAHE, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
         self.log('val_minFDE', self.minFDE, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
         self.log('val_minFHE', self.minFHE, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
+        self.log('val_RMSE_X', self.RMSEX, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
+        self.log('val_RMSE_Y', self.RMSEY, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
         self.log('val_MR', self.MR, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
+        # traj = traj_eval.squeeze()
+        # MSE_X = torch.sum((traj_propose_best[..., 0] - gt[eval_mask][:, :, 0])**2)
+        # MSE_Y = torch.sum((traj_propose_best[..., 1] - gt[eval_mask][:, :, 1])**2)
+        # size=((traj_propose_best[..., 0] - gt[eval_mask][:, :, 0])**2).size()
+        # result = torch.prod(torch.tensor(size))
+        # self.total_MSE_X += MSE_X
+        # self.total_MSE_Y += MSE_Y
+        # self.count += 1*result
+        # self.avg_RMSE_X = torch.sqrt(self.total_MSE_X / self.count)
+        # self.avg_RMSE_Y = torch.sqrt(self.total_MSE_Y / self.count)
+        # self.log('avg_RMSE_X', self.avg_RMSE_X, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
+        # self.log('avg_RMSE_Y', self.avg_RMSE_Y, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
+
+
 
     def test_step(self,
                   data,
@@ -301,7 +348,7 @@ class QCNet(pl.LightningModule):
             traj_refine = torch.cat([pred['loc_refine_pos'][..., :self.output_dim],
                                      pred['scale_refine_pos'][..., :self.output_dim]], dim=-1)
         pi = pred['pi']
-        if self.dataset == 'argoverse_v2':
+        if self.dataset == 'argoverse_v2' or self.dataset == 'argoverse_v2_ACL':
             eval_mask = data['agent']['category'] == 3
         else:
             raise ValueError('{} is not a valid dataset'.format(self.dataset))
@@ -319,7 +366,7 @@ class QCNet(pl.LightningModule):
 
         traj_eval = traj_eval.cpu().numpy()
         pi_eval = pi_eval.cpu().numpy()
-        if self.dataset == 'argoverse_v2':
+        if self.dataset == 'argoverse_v2' or self.dataset == 'argoverse_v2_ACL':
             eval_id = list(compress(list(chain(*data['agent']['id'])), eval_mask))
             if isinstance(data, Batch):
                 for i in range(data.num_graphs):
@@ -330,7 +377,7 @@ class QCNet(pl.LightningModule):
             raise ValueError('{} is not a valid dataset'.format(self.dataset))
 
     def on_test_end(self):
-        if self.dataset == 'argoverse_v2':
+        if self.dataset == 'argoverse_v2' or self.dataset == 'argoverse_v2_ACL':
             ChallengeSubmission(self.test_predictions).to_parquet(
                 Path(self.submission_dir) / f'{self.submission_file_name}.parquet')
         else:
@@ -370,6 +417,20 @@ class QCNet(pl.LightningModule):
         optimizer = torch.optim.AdamW(optim_groups, lr=self.lr, weight_decay=self.weight_decay)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=self.T_max, eta_min=0.0)
         return [optimizer], [scheduler]
+    
+    def on_epoch_end(self):
+        # 훈련 및 검증이 끝난 후에 파일에 결과 저장
+        self.save_metrics('/home/user/QCNet/validation_metrics.txt', self.validation_metrics)
+
+    def save_metrics(self, filename, metrics):
+        with open(filename, 'w') as f:
+            for item in metrics:
+                f.write(f'MSE_X: {item[0]}, MSE_Y: {item[1]}, Result: {item[2]}\n')
+
+    def save_values(self, pos_x,pos_y,traj_values_x, gt_values_x,traj_values_y, gt_values_y):
+        with open("/home/user/QCNet/0412_value.txt", "a") as f:
+            for pos_x,pos_y,traj_val_x, gt_val_x,traj_val_y, gt_val_y in zip(pos_x.flatten(),pos_y.flatten(),traj_values_x.flatten(), gt_values_x.flatten(),traj_values_y.flatten(), gt_values_y.flatten()):
+                f.write(f"pos_x:{pos_x},pos_y:{pos_y},traj_x: {traj_val_x}, gt_x: {gt_val_x},traj_y: {traj_val_y}, gt_y: {gt_val_y}\n")
 
     @staticmethod
     def add_model_specific_args(parent_parser):

@@ -41,6 +41,7 @@ def inference_benchmark(
             end.record()
             torch.cuda.synchronize()
             times.append(start.elapsed_time(end))
+            break
     mean_time = np.mean(times)
     std_time = np.std(times)
     print('Average inference time (ms): {:.3f} +- {:.3f}'.format(mean_time, std_time))

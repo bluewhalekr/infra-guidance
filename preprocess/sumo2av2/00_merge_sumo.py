@@ -4,17 +4,20 @@ import pandas as pd
 import random
 import math
 
-use_case = ["A1", "B1", "C1", "D3", "D4"]
+# use_case = ["A1", "B1", "C1", "D3", "D4"]
+use_case = ["A1", "B1", "D3"]
 
 for site in use_case:
     obj_dfs = [
-                pd.read_csv('/noah/dataset/infra-guidance/SUMO/sumo_origin/{}/{}_normal_object.csv'.format(site,site)),
-                pd.read_csv('/noah/dataset/infra-guidance/SUMO/sumo_origin/{}/{}_friction_object.csv'.format(site,site))
+                # pd.read_csv('/noah/dataset/infra-guidance/SUMO/sumo_origin/{}/{}_normal_object.csv'.format(site,site)),
+                # pd.read_csv('/noah/dataset/infra-guidance/SUMO/sumo_origin/{}/{}_friction_object.csv'.format(site,site)),
+                pd.read_csv('/noah/dataset/infra-guidance/SUMO/sumo_origin/{}/{}_tc_object.csv'.format(site,site))
             ]
 
     track_dfs = [
-                    pd.read_csv('/noah/dataset/infra-guidance/SUMO/sumo_origin/{}/{}_normal_track.csv'.format(site,site)),
-                    pd.read_csv('/noah/dataset/infra-guidance/SUMO/sumo_origin/{}/{}_friction_track.csv'.format(site,site))
+                    # pd.read_csv('/noah/dataset/infra-guidance/SUMO/sumo_origin/{}/{}_normal_track.csv'.format(site,site)),
+                    # pd.read_csv('/noah/dataset/infra-guidance/SUMO/sumo_origin/{}/{}_friction_track.csv'.format(site,site)),
+                    pd.read_csv('/noah/dataset/infra-guidance/SUMO/sumo_origin/{}/{}_tc_track.csv'.format(site,site)),
                 ]
 
     combined = {
@@ -67,30 +70,34 @@ for site in use_case:
 
     combined_df = pd.DataFrame(combined)
 
-    unique_recording_ids = set(combined_df['recordingId'])
-    train_dfs = []
-    val_dfs = []
-    ratio = 0.9
+    test_path = '/noah/dataset/infra-guidance/SUMO/sumo_origin/{}/TEST'.format(site)
+    os.makedirs(test_path,exist_ok=True)
+    combined_df.to_csv(os.path.join(test_path, 'pp_{}__combined.csv'.format(site)), index=False)
 
-    for recording_id in unique_recording_ids:
-        unique_combined_df = combined_df[combined_df['recordingId']==recording_id]
-        object_ids = set(unique_combined_df['trackId'])    
-        train_object_ids = random.sample(object_ids, int(len(object_ids)*ratio))
+    # unique_recording_ids = set(combined_df['recordingId'])
+    # train_dfs = []
+    # val_dfs = []
+    # ratio = 0.9
 
-        train_df = unique_combined_df[unique_combined_df['trackId'].isin(train_object_ids)]
-        val_df = unique_combined_df[~unique_combined_df['trackId'].isin(train_object_ids)]
+    # for recording_id in unique_recording_ids:
+    #     unique_combined_df = combined_df[combined_df['recordingId']==recording_id]
+    #     object_ids = set(unique_combined_df['trackId'])    
+    #     train_object_ids = random.sample(object_ids, int(len(object_ids)*ratio))
 
-        train_dfs.append(train_df)
-        val_dfs.append(val_df)
+    #     train_df = unique_combined_df[unique_combined_df['trackId'].isin(train_object_ids)]
+    #     val_df = unique_combined_df[~unique_combined_df['trackId'].isin(train_object_ids)]
 
-    train_dfs = pd.concat(train_dfs, ignore_index=True)
-    val_dfs = pd.concat(val_dfs, ignore_index=True)
+    #     train_dfs.append(train_df)
+    #     val_dfs.append(val_df)
 
-    train_path = '/noah/dataset/infra-guidance/SUMO/sumo_origin/{}/TRAIN'.format(site)
-    val_path = '/noah/dataset/infra-guidance/SUMO/sumo_origin/{}/VALI'.format(site)
+    # train_dfs = pd.concat(train_dfs, ignore_index=True)
+    # val_dfs = pd.concat(val_dfs, ignore_index=True)
 
-    os.makedirs(train_path,exist_ok=True)
-    os.makedirs(val_path,exist_ok=True)
+    # train_path = '/noah/dataset/infra-guidance/SUMO/sumo_origin/{}/TRAIN'.format(site)
+    # val_path = '/noah/dataset/infra-guidance/SUMO/sumo_origin/{}/VALI'.format(site)
 
-    train_dfs.to_csv(os.path.join(train_path, 'pp_{}__combined.csv'.format(site)), index=False)
-    val_dfs.to_csv(os.path.join(val_path, 'pp_{}__combined.csv'.format(site)), index=False)
+    # os.makedirs(train_path,exist_ok=True)
+    # os.makedirs(val_path,exist_ok=True)
+
+    # train_dfs.to_csv(os.path.join(train_path, 'pp_{}__combined.csv'.format(site)), index=False)
+    # val_dfs.to_csv(os.path.join(val_path, 'pp_{}__combined.csv'.format(site)), index=False)

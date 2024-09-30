@@ -139,6 +139,9 @@ class ArgoverseV2Dataset(Dataset):
         self._polygon_to_polygon_types = ['NONE', 'PRED', 'SUCC', 'LEFT', 'RIGHT']
         super(ArgoverseV2Dataset, self).__init__(root=root, transform=transform, pre_transform=None, pre_filter=None)
 
+        if self.split=='test':
+            self.process()
+
     @property
     def raw_dir(self) -> str:
         return self._raw_dir

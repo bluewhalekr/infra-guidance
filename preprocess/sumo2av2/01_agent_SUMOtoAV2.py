@@ -93,6 +93,10 @@ def process_track_files(tracks_file_path, output_folder, input_frame, output_fra
                     # 파일 저장
                     new_file_path = os.path.join(new_folder_path, new_file_name)
                     df_group.to_csv(new_file_path, index=False)
+                else:
+                    print('error')
+            else:
+                print('error')
 
 def generate_folder_path(base_folder, input_frame, output_frame):
     # 오늘의 날짜를 문자열로 변환
@@ -120,21 +124,26 @@ def convert_csv_to_parquet(folder_path):
 # 설정값 정의
 input_frame = 10
 output_frame = 30  # hz
-use_case = ["A1", "B1", "C1", "D3", "D4"]
+# use_case = ["A1", "B1", "C1", "D3", "D4"]
+use_case = ["A1", "B1", "D3"]
 src_path = '/noah/dataset/infra-guidance/SUMO/sumo_origin'
 dst_path = '/noah/dataset/infra-guidance/SUMO/sumo_process'
 
 for uc in use_case:
-    train_input_folder = os.path.join(src_path, uc, 'TRAIN')
-    val_input_folder = os.path.join(src_path, uc, 'VALI')
+    # train_input_folder = os.path.join(src_path, uc, 'TRAIN')
+    # val_input_folder = os.path.join(src_path, uc, 'VALI')
+    test_input_folder = os.path.join(src_path, uc, 'TEST')
     
     # 출력 폴더 생성
-    train_output_folder = generate_folder_path(os.path.join(dst_path, '{}/train/raw'.format(uc)), input_frame, output_frame)
-    val_output_folder = generate_folder_path(os.path.join(dst_path, '{}/val/raw'.format(uc)), input_frame, output_frame)
+    # train_output_folder = generate_folder_path(os.path.join(dst_path, '{}/train/raw'.format(uc)), input_frame, output_frame)
+    # val_output_folder = generate_folder_path(os.path.join(dst_path, '{}/val/raw'.format(uc)), input_frame, output_frame)
+    test_output_folder = generate_folder_path(os.path.join(dst_path, '{}/test/raw'.format(uc)), input_frame, output_frame)
 
     # 파일 처리 및 CSV -> Parquet 변환
-    process_files(train_input_folder, train_output_folder, input_frame, output_frame)
-    process_files(val_input_folder, val_output_folder, input_frame, output_frame)
+    # process_files(train_input_folder, train_output_folder, input_frame, output_frame)
+    # process_files(val_input_folder, val_output_folder, input_frame, output_frame)
+    process_files(test_input_folder, test_output_folder, input_frame, output_frame)
 
-    convert_csv_to_parquet(train_output_folder)
-    convert_csv_to_parquet(val_output_folder)
+    # convert_csv_to_parquet(train_output_folder)
+    # convert_csv_to_parquet(val_output_folder)
+    convert_csv_to_parquet(test_output_folder)
