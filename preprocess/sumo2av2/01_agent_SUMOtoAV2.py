@@ -185,7 +185,7 @@ if __name__=="__main__":
             convert_csv_to_parquet(train_output_folder)
             convert_csv_to_parquet(val_output_folder)
         else:
-            test_input_folder = os.path.join(src_path, uc, 'TEST')
+            test_input_folder = os.path.join(args.src_dir, uc, 'TEST')
             test_output_folder = generate_folder_path(os.path.join(args.dst_dir, '{}/test/raw'.format(uc)), args.input_frame, args.output_frame)
             process_files(test_input_folder, test_output_folder, args.input_frame, args.output_frame)
             convert_csv_to_parquet(test_output_folder)
