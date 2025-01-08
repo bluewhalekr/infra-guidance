@@ -5,15 +5,15 @@ from tqdm import tqdm
 from datetime import date
 import argparse
 
-def process_files(folder_path, output_folder, input_frame, output_frame):
+def process_files(folder_path, output_folder, input_frame, output_frame, sample_step):
     # 파일 처리 함수 호출
     files = os.listdir(folder_path)
     for file_name in tqdm(files, desc="전체 폴더 진행 중"):
         if file_name.endswith('.csv'):
             tracks_file_path = os.path.join(folder_path, file_name)
-            process_track_files(tracks_file_path, output_folder, input_frame, output_frame)
+            process_track_files(tracks_file_path, output_folder, input_frame, output_frame, sample_step)
 
-def process_track_files(tracks_file_path, output_folder, input_frame, output_frame):
+def process_track_files(tracks_file_path, output_folder, input_frame, output_frame, sample_step):
     # 데이터 불러오기
     df = pd.read_csv(tracks_file_path)
 
@@ -47,13 +47,13 @@ def process_track_files(tracks_file_path, output_folder, input_frame, output_fra
              'heading', 'velocity_x', 'velocity_y', 'scenario_id', 'start_timestamp', 'end_timestamp',
              'num_timestamps', 'focal_track_id', 'city']]
 
-    frame_interval = output_frame + input_frame
     unique_recording_ids = list(set(df['recordingId']))
     for recording_id in unique_recording_ids:
         max_frame = df[df['recordingId']==recording_id]['timestep'].max()
+        frame_interval = output_frame + input_frame
         num_files = max_frame - frame_interval + 1
 
-        for i in tqdm(range(0,num_files,frame_interval//2), desc="폴더 내 파일 생성 중"):
+        for i in tqdm(range(0,num_files,sample_step), desc="폴더 내 파일 생성 중"):
             new_scenario_id = f'{base_scenario_id_str}{i:05}'  # 새로운 시나리오 ID 생성
 
             start_frame = i
@@ -69,9 +69,14 @@ def process_track_files(tracks_file_path, output_folder, input_frame, output_fra
                 # 새로운 데이터 필터링 단계 추가
                 df_group = df_group.groupby('track_id').filter(lambda x: set(range(output_frame + input_frame)).issubset(x['timestep']))
 
+                if 114 in list(df_group['track_id']) and new_scenario_id==1006223:
+                    print('yes')
+
                 # velocity_x 및 velocity_y 열의 평균의 절댓값이 0.05보다 작은 행만 유지
-                df_group = df_group[(df_group.groupby('track_id')['velocity_x'].transform('mean').abs() > 0) &
-                                    (df_group.groupby('track_id')['velocity_y'].transform('mean').abs() > 0)]
+                mean_velocity_x = df_group.groupby('track_id')['velocity_x'].transform(lambda x: x.abs().mean())
+                mean_velocity_y = df_group.groupby('track_id')['velocity_y'].transform(lambda y: y.abs().mean())
+
+                df_group = df_group[(mean_velocity_x > 0) & (mean_velocity_y > 0)]
 
                 if not df_group.empty:
                     if not set(range(output_frame + input_frame)).issubset(df_group['timestep']):
@@ -168,11 +173,20 @@ def parse_args():
         required=False,
         help="The output frame numbers.",
     )
+    parser.add_argument(
+        "--sample_step",
+        type=int,
+        default=1,
+        required=False,
+        help="The frame sampling steps",
+    )
     args = parser.parse_args()
     return args
 
 if __name__=="__main__":
     args = parse_args()
+
+    os.makedirs(args.dst_dir, exist_ok=True)
 
     for uc in args.use_case:
         if args.mode:
@@ -180,12 +194,12 @@ if __name__=="__main__":
             val_input_folder = os.path.join(args.src_dir, uc, 'VALI')
             train_output_folder = generate_folder_path(os.path.join(args.dst_dir, '{}/train/raw'.format(uc)), args.input_frame, args.output_frame)
             val_output_folder = generate_folder_path(os.path.join(args.dst_dir, '{}/val/raw'.format(uc)), args.input_frame, args.output_frame)
-            process_files(train_input_folder, train_output_folder, args.input_frame, args.output_frame)
-            process_files(val_input_folder, val_output_folder, args.input_frame, args.output_frame)
+            process_files(train_input_folder, train_output_folder, args.input_frame, args.output_frame, args.sample_step)
+            process_files(val_input_folder, val_output_folder, args.input_frame, args.output_frame, args.sample_step)
             convert_csv_to_parquet(train_output_folder)
             convert_csv_to_parquet(val_output_folder)
         else:
             test_input_folder = os.path.join(args.src_dir, uc, 'TEST')
             test_output_folder = generate_folder_path(os.path.join(args.dst_dir, '{}/test/raw'.format(uc)), args.input_frame, args.output_frame)
-            process_files(test_input_folder, test_output_folder, args.input_frame, args.output_frame)
+            process_files(test_input_folder, test_output_folder, args.input_frame, args.output_frame, args.sample_step)
             convert_csv_to_parquet(test_output_folder)

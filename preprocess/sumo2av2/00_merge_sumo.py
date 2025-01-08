@@ -54,11 +54,12 @@ def get_av2_data(combined, sumo_track_info, sumo_object_df, recording_id):
     combined['xCenter'].append(sumo_track_info['DistanceX'])
     combined['yCenter'].append(sumo_track_info['DistanceY'])
 
-    heading = -(sumo_track_info['Heading']-90)
+    heading = math.radians(sumo_track_info['Heading'])
+    heading = -(heading-math.pi/2)
     speed = sumo_track_info['Speed']
-    combined['heading'].append(heading)
     combined['xVelocity'].append(speed*math.cos(heading))
     combined['yVelocity'].append(speed*math.sin(heading))
+    combined['heading'].append(heading)
     combined['xAcceleration'].append(sumo_track_info['Acceleration'])
 
     combined['LongitudinalManeuver'].append(sumo_track_info['LongitudinalManeuver'])
