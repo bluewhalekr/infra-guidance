@@ -21,31 +21,53 @@ from datasets import ArgoverseV2Dataset
 from predictors import QCNet
 from transforms import TargetBuilder
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     pl.seed_everything(2023, workers=True)
 
     parser = ArgumentParser()
-    parser.add_argument('--model', type=str, required=True)
-    parser.add_argument('--root', type=str, required=True)
-    parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--num_workers', type=int, default=1)
-    parser.add_argument('--pin_memory', type=bool, default=True)
-    parser.add_argument('--persistent_workers', type=bool, default=True)
-    parser.add_argument('--accelerator', type=str, default='auto')
-    parser.add_argument('--devices', type=int, default=1)
-    parser.add_argument('--ckpt_path', type=str, required=True)
+    parser.add_argument("--model", type=str, required=True)
+    parser.add_argument("--root", type=str, required=True)
+    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--num_workers", type=int, default=1)
+    parser.add_argument("--pin_memory", type=bool, default=True)
+    parser.add_argument("--persistent_workers", type=bool, default=True)
+    parser.add_argument("--accelerator", type=str, default="auto")
+    parser.add_argument("--devices", type=int, default=1)
+    parser.add_argument("--ckpt_path", type=str, required=True)
     args = parser.parse_args()
-    split = 'test'
-    
+    split = "val"
+
     model = {
-        'QCNet': QCNet,
-    }[args.model].load_from_checkpoint(checkpoint_path=args.ckpt_path)
+        "QCNet": QCNet,
+    }[
+        args.model
+    ].load_from_checkpoint(checkpoint_path=args.ckpt_path)
     val_dataset = {
-        'argoverse_v2': ArgoverseV2Dataset,
-    }[model.dataset](root=args.root, split=split,
-                     transform=TargetBuilder(model.num_historical_steps, model.num_future_steps))
-    logger = TensorBoardLogger("logs/", name='{}_{}_{}'.format(args.root.split('/')[-1], args.ckpt_path.split('/')[-2], split), version="")
-    dataloader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers,
-                            pin_memory=args.pin_memory, persistent_workers=args.persistent_workers)
-    trainer = pl.Trainer(accelerator=args.accelerator, logger=logger, devices=args.devices, strategy='ddp')
+        "argoverse_v2": ArgoverseV2Dataset,
+    }[model.dataset](
+        root=args.root,
+        split=split,
+        transform=TargetBuilder(model.num_historical_steps, model.num_future_steps),
+    )
+    logger = TensorBoardLogger(
+        "logs/",
+        name="{}_{}_{}".format(
+            args.root.split("/")[-1], args.ckpt_path.split("/")[-2], split
+        ),
+        version="",
+    )
+    dataloader = DataLoader(
+        val_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=args.num_workers,
+        pin_memory=args.pin_memory,
+        persistent_workers=args.persistent_workers,
+    )
+    trainer = pl.Trainer(
+        accelerator=args.accelerator,
+        logger=logger,
+        devices=args.devices,
+        strategy="ddp",
+    )
     trainer.validate(model, dataloader)
