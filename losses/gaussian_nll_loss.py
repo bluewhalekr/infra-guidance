@@ -20,7 +20,7 @@ class GaussianNLLLoss(nn.Module):
 
     def __init__(self,
                  full: bool = False,
-                 eps: float = 1e-6,
+                 eps: float = 1e-2,  # 더 큰 값으로 조정
                  reduction: str = 'mean') -> None:
         super(GaussianNLLLoss, self).__init__()
         self.full = full
@@ -31,5 +31,19 @@ class GaussianNLLLoss(nn.Module):
                 pred: torch.Tensor,
                 target: torch.Tensor) -> torch.Tensor:
         mean, var = pred.chunk(2, dim=-1)
-        return F.gaussian_nll_loss(input=mean, target=target, var=var, full=self.full, eps=self.eps,
-                                   reduction=self.reduction)
+        var = var.clone()
+        with torch.no_grad():
+            var.clamp_(min=self.eps)
+        
+        # 커스텀 Gaussian NLL with penalty
+        nll = 0.5 * torch.log(2 * torch.pi * var) + 0.5 * (target - mean)**2 / var
+        penalty = 0.1 * (1/var).mean()  # 분산이 작아지는 것을 방지
+        
+        if self.reduction == 'mean':
+            return nll.mean() + penalty
+        elif self.reduction == 'sum':
+            return nll.sum() + penalty
+        elif self.reduction == 'none':
+            return nll + penalty
+        else:
+            raise ValueError('{} is not a valid value for reduction'.format(self.reduction))

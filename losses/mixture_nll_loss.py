@@ -21,13 +21,13 @@ from torch_scatter import segment_csr
 from losses.gaussian_nll_loss import GaussianNLLLoss
 from losses.laplace_nll_loss import LaplaceNLLLoss
 from losses.von_mises_nll_loss import VonMisesNLLLoss
-
+from losses.studentt_nll_loss import StudentTNLLLoss
 
 class MixtureNLLLoss(nn.Module):
 
     def __init__(self,
                  component_distribution: Union[str, List[str]],
-                 eps: float = 1e-6,
+                 eps: float = 1e-3,
                  reduction: str = 'mean') -> None:
         super(MixtureNLLLoss, self).__init__()
         self.reduction = reduction
@@ -36,6 +36,7 @@ class MixtureNLLLoss(nn.Module):
             'gaussian': GaussianNLLLoss,
             'laplace': LaplaceNLLLoss,
             'von_mises': VonMisesNLLLoss,
+            'studentt': StudentTNLLLoss,
         }
         if isinstance(component_distribution, str):
             self.nll_loss = loss_dict[component_distribution](eps=eps, reduction='none')

@@ -21,3 +21,6 @@ from losses.mixture_of_von_mises_nll_loss import MixtureOfVonMisesNLLLoss
 from losses.nll_loss import NLLLoss
 from losses.soft_target_cross_entropy_loss import SoftTargetCrossEntropyLoss
 from losses.von_mises_nll_loss import VonMisesNLLLoss
+
+## Student's t loss
+from losses.studentt_nll_loss import StudentTNLLLoss

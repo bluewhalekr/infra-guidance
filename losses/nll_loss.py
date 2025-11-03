@@ -19,7 +19,7 @@ import torch.nn as nn
 from losses.gaussian_nll_loss import GaussianNLLLoss
 from losses.laplace_nll_loss import LaplaceNLLLoss
 from losses.von_mises_nll_loss import VonMisesNLLLoss
-
+from losses.studentt_nll_loss import StudentTNLLLoss
 
 class NLLLoss(nn.Module):
 
@@ -34,6 +34,7 @@ class NLLLoss(nn.Module):
             'gaussian': GaussianNLLLoss,
             'laplace': LaplaceNLLLoss,
             'von_mises': VonMisesNLLLoss,
+            'studentt': StudentTNLLLoss,
         }
         if isinstance(component_distribution, str):
             self.nll_loss = loss_dict[component_distribution](eps=eps, reduction='none')

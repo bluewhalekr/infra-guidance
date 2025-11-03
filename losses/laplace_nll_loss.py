@@ -31,11 +31,13 @@ class LaplaceNLLLoss(nn.Module):
         scale = scale.clone()
         with torch.no_grad():
             scale.clamp_(min=self.eps)
-        nll = torch.log(2 * scale) + torch.abs(target - loc) / scale
+        # nll = torch.log(2 * scale) + torch.abs(target - loc) / scale
+        nll = torch.log( 4 * scale) + torch.abs(target - loc) / scale # ped: 4, veh: 2
+        penalty = 0.5 * (1/scale).mean()
         if self.reduction == 'mean':
-            return nll.mean()
+            return nll.mean() + penalty
         elif self.reduction == 'sum':
-            return nll.sum()
+            return nll.sum() + penalty
         elif self.reduction == 'none':
             return nll
         else:
