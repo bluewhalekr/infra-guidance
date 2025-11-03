@@ -45,36 +45,38 @@ except ImportError:
 
 class QCNet(pl.LightningModule):
 
-    def __init__(self,
-                 dataset: str,
-                 input_dim: int,
-                 hidden_dim: int,
-                 output_dim: int,
-                 output_head: bool,
-                 num_historical_steps: int,
-                 num_future_steps: int,
-                 num_modes: int,
-                 num_recurrent_steps: int,
-                 num_freq_bands: int,
-                 num_map_layers: int,
-                 num_agent_layers: int,
-                 num_dec_layers: int,
-                 num_heads: int,
-                 head_dim: int,
-                 dropout: float,
-                 pl2pl_radius: float,
-                 time_span: Optional[int],
-                 pl2a_radius: float,
-                 a2a_radius: float,
-                 num_t2m_steps: Optional[int],
-                 pl2m_radius: float,
-                 a2m_radius: float,
-                 lr: float,
-                 weight_decay: float,
-                 T_max: int,
-                 submission_dir: str,
-                 submission_file_name: str,
-                 **kwargs) -> None:
+    def __init__(
+        self,
+        dataset: str,
+        input_dim: int,
+        hidden_dim: int,
+        output_dim: int,
+        output_head: bool,
+        num_historical_steps: int,
+        num_future_steps: int,
+        num_modes: int,
+        num_recurrent_steps: int,
+        num_freq_bands: int,
+        num_map_layers: int,
+        num_agent_layers: int,
+        num_dec_layers: int,
+        num_heads: int,
+        head_dim: int,
+        dropout: float,
+        pl2pl_radius: float,
+        time_span: Optional[int],
+        pl2a_radius: float,
+        a2a_radius: float,
+        num_t2m_steps: Optional[int],
+        pl2m_radius: float,
+        a2m_radius: float,
+        lr: float,
+        weight_decay: float,
+        T_max: int,
+        submission_dir: str,
+        submission_file_name: str,
+        **kwargs,
+    ) -> None:
         super(QCNet, self).__init__()
         self.save_hyperparameters()
         self.dataset = dataset
@@ -142,10 +144,16 @@ class QCNet(pl.LightningModule):
             dropout=dropout,
         )
 
-        self.reg_loss = NLLLoss(component_distribution=['laplace'] * output_dim + ['von_mises'] * output_head,
-                                reduction='none')
-        self.cls_loss = MixtureNLLLoss(component_distribution=['laplace'] * output_dim + ['von_mises'] * output_head,
-                                       reduction='none')
+        self.reg_loss = NLLLoss(
+            component_distribution=["laplace"] * output_dim
+            + ["von_mises"] * output_head,
+            reduction="none",
+        )
+        self.cls_loss = MixtureNLLLoss(
+            component_distribution=["laplace"] * output_dim
+            + ["von_mises"] * output_head,
+            reduction="none",
+        )
 
         # # k=6
         self.Brier = Brier(max_guesses=6)
@@ -168,156 +176,380 @@ class QCNet(pl.LightningModule):
         # self.minFDE = minFDE(max_guesses=1)
         # self.minFHE = minFHE(max_guesses=1)
         # self.MR = MR(max_guesses=1)
-        
+
         # self.avg_RMSE_X = None
         # self.avg_RMSE_Y = None
         # self.total_MSE_X = 0
         # self.total_MSE_Y = 0
         # self.count = 0
-        
+
         # self.validation_metrics = []
-        
+
         self.test_predictions = dict()
-        
 
     def forward(self, data: HeteroData):
         scene_enc = self.encoder(data)
         pred = self.decoder(data, scene_enc)
         return pred
 
-    def training_step(self,
-                      data,
-                      batch_idx):
+    def training_step(self, data, batch_idx):
         if isinstance(data, Batch):
-            data['agent']['av_index'] += data['agent']['ptr'][:-1]
-        reg_mask = data['agent']['predict_mask'][:, self.num_historical_steps:]
-        cls_mask = data['agent']['predict_mask'][:, -1]
+            data["agent"]["av_index"] += data["agent"]["ptr"][:-1]
+        reg_mask = data["agent"]["predict_mask"][:, self.num_historical_steps :]
+        cls_mask = data["agent"]["predict_mask"][:, -1]
         pred = self(data)
         if self.output_head:
-            traj_propose = torch.cat([pred['loc_propose_pos'][..., :self.output_dim],
-                                      pred['loc_propose_head'],
-                                      pred['scale_propose_pos'][..., :self.output_dim],
-                                      pred['conc_propose_head']], dim=-1)
-            traj_refine = torch.cat([pred['loc_refine_pos'][..., :self.output_dim],
-                                     pred['loc_refine_head'],
-                                     pred['scale_refine_pos'][..., :self.output_dim],
-                                     pred['conc_refine_head']], dim=-1)
+            traj_propose = torch.cat(
+                [
+                    pred["loc_propose_pos"][..., : self.output_dim],
+                    pred["loc_propose_head"],
+                    pred["scale_propose_pos"][..., : self.output_dim],
+                    pred["conc_propose_head"],
+                ],
+                dim=-1,
+            )
+            traj_refine = torch.cat(
+                [
+                    pred["loc_refine_pos"][..., : self.output_dim],
+                    pred["loc_refine_head"],
+                    pred["scale_refine_pos"][..., : self.output_dim],
+                    pred["conc_refine_head"],
+                ],
+                dim=-1,
+            )
         else:
-            traj_propose = torch.cat([pred['loc_propose_pos'][..., :self.output_dim],
-                                      pred['scale_propose_pos'][..., :self.output_dim]], dim=-1)
-            traj_refine = torch.cat([pred['loc_refine_pos'][..., :self.output_dim],
-                                     pred['scale_refine_pos'][..., :self.output_dim]], dim=-1)
-        pi = pred['pi']
-        gt = torch.cat([data['agent']['target'][..., :self.output_dim], data['agent']['target'][..., -1:]], dim=-1)
-        l2_norm = (torch.norm(traj_propose[..., :self.output_dim] -
-                              gt[..., :self.output_dim].unsqueeze(1), p=2, dim=-1) * reg_mask.unsqueeze(1)).sum(dim=-1)
+            traj_propose = torch.cat(
+                [
+                    pred["loc_propose_pos"][..., : self.output_dim],
+                    pred["scale_propose_pos"][..., : self.output_dim],
+                ],
+                dim=-1,
+            )
+            traj_refine = torch.cat(
+                [
+                    pred["loc_refine_pos"][..., : self.output_dim],
+                    pred["scale_refine_pos"][..., : self.output_dim],
+                ],
+                dim=-1,
+            )
+        pi = pred["pi"]
+        gt = torch.cat(
+            [
+                data["agent"]["target"][..., : self.output_dim],
+                data["agent"]["target"][..., -1:],
+            ],
+            dim=-1,
+        )
+        l2_norm = (
+            torch.norm(
+                traj_propose[..., : self.output_dim]
+                - gt[..., : self.output_dim].unsqueeze(1),
+                p=2,
+                dim=-1,
+            )
+            * reg_mask.unsqueeze(1)
+        ).sum(dim=-1)
         best_mode = l2_norm.argmin(dim=-1)
         traj_propose_best = traj_propose[torch.arange(traj_propose.size(0)), best_mode]
         traj_refine_best = traj_refine[torch.arange(traj_refine.size(0)), best_mode]
-        reg_loss_propose = self.reg_loss(traj_propose_best,
-                                         gt[..., :self.output_dim + self.output_head]).sum(dim=-1) * reg_mask
-        reg_loss_propose = reg_loss_propose.sum(dim=0) / reg_mask.sum(dim=0).clamp_(min=1)
+        reg_loss_propose = (
+            self.reg_loss(
+                traj_propose_best, gt[..., : self.output_dim + self.output_head]
+            ).sum(dim=-1)
+            * reg_mask
+        )
+        reg_loss_propose = reg_loss_propose.sum(dim=0) / reg_mask.sum(dim=0).clamp_(
+            min=1
+        )
         reg_loss_propose = reg_loss_propose.mean()
-        reg_loss_refine = self.reg_loss(traj_refine_best,
-                                        gt[..., :self.output_dim + self.output_head]).sum(dim=-1) * reg_mask
+        reg_loss_refine = (
+            self.reg_loss(
+                traj_refine_best, gt[..., : self.output_dim + self.output_head]
+            ).sum(dim=-1)
+            * reg_mask
+        )
         reg_loss_refine = reg_loss_refine.sum(dim=0) / reg_mask.sum(dim=0).clamp_(min=1)
         reg_loss_refine = reg_loss_refine.mean()
-        cls_loss = self.cls_loss(pred=traj_refine[:, :, -1:].detach(),
-                                 target=gt[:, -1:, :self.output_dim + self.output_head],
-                                 prob=pi,
-                                 mask=reg_mask[:, -1:]) * cls_mask
+        cls_loss = (
+            self.cls_loss(
+                pred=traj_refine[:, :, -1:].detach(),
+                target=gt[:, -1:, : self.output_dim + self.output_head],
+                prob=pi,
+                mask=reg_mask[:, -1:],
+            )
+            * cls_mask
+        )
         cls_loss = cls_loss.sum() / cls_mask.sum().clamp_(min=1)
-        self.log('train_reg_loss_propose', reg_loss_propose, prog_bar=False, on_step=True, on_epoch=True, batch_size=1)
-        self.log('train_reg_loss_refine', reg_loss_refine, prog_bar=False, on_step=True, on_epoch=True, batch_size=1)
-        self.log('train_cls_loss', cls_loss, prog_bar=False, on_step=True, on_epoch=True, batch_size=1)
+        self.log(
+            "train_reg_loss_propose",
+            reg_loss_propose,
+            prog_bar=False,
+            on_step=True,
+            on_epoch=True,
+            batch_size=1,
+        )
+        self.log(
+            "train_reg_loss_refine",
+            reg_loss_refine,
+            prog_bar=False,
+            on_step=True,
+            on_epoch=True,
+            batch_size=1,
+        )
+        self.log(
+            "train_cls_loss",
+            cls_loss,
+            prog_bar=False,
+            on_step=True,
+            on_epoch=True,
+            batch_size=1,
+        )
         loss = reg_loss_propose + reg_loss_refine + cls_loss
         return loss
 
-    def validation_step(self,
-                        data,
-                        batch_idx):
+    def validation_step(self, data, batch_idx):
         if isinstance(data, Batch):
-            data['agent']['av_index'] += data['agent']['ptr'][:-1]
-        reg_mask = data['agent']['predict_mask'][:, self.num_historical_steps:]
-        cls_mask = data['agent']['predict_mask'][:, -1]
+            data["agent"]["av_index"] += data["agent"]["ptr"][:-1]
+        reg_mask = data["agent"]["predict_mask"][:, self.num_historical_steps :]
+        cls_mask = data["agent"]["predict_mask"][:, -1]
         pred = self(data)
         # print(f"keys of original prediction : {pred.keys()}")
         if self.output_head:
-            traj_propose = torch.cat([pred['loc_propose_pos'][..., :self.output_dim],
-                                      pred['loc_propose_head'],
-                                      pred['scale_propose_pos'][..., :self.output_dim],
-                                      pred['conc_propose_head']], dim=-1)
-            traj_refine = torch.cat([pred['loc_refine_pos'][..., :self.output_dim],
-                                     pred['loc_refine_head'],
-                                     pred['scale_refine_pos'][..., :self.output_dim],
-                                     pred['conc_refine_head']], dim=-1)
+            traj_propose = torch.cat(
+                [
+                    pred["loc_propose_pos"][..., : self.output_dim],
+                    pred["loc_propose_head"],
+                    pred["scale_propose_pos"][..., : self.output_dim],
+                    pred["conc_propose_head"],
+                ],
+                dim=-1,
+            )
+            traj_refine = torch.cat(
+                [
+                    pred["loc_refine_pos"][..., : self.output_dim],
+                    pred["loc_refine_head"],
+                    pred["scale_refine_pos"][..., : self.output_dim],
+                    pred["conc_refine_head"],
+                ],
+                dim=-1,
+            )
         else:
-            traj_propose = torch.cat([pred['loc_propose_pos'][..., :self.output_dim],
-                                      pred['scale_propose_pos'][..., :self.output_dim]], dim=-1)
-            traj_refine = torch.cat([pred['loc_refine_pos'][..., :self.output_dim],
-                                     pred['scale_refine_pos'][..., :self.output_dim]], dim=-1)
-        pi = pred['pi']
-        gt = torch.cat([data['agent']['target'][..., :self.output_dim], data['agent']['target'][..., -1:]], dim=-1)
+            traj_propose = torch.cat(
+                [
+                    pred["loc_propose_pos"][..., : self.output_dim],
+                    pred["scale_propose_pos"][..., : self.output_dim],
+                ],
+                dim=-1,
+            )
+            traj_refine = torch.cat(
+                [
+                    pred["loc_refine_pos"][..., : self.output_dim],
+                    pred["scale_refine_pos"][..., : self.output_dim],
+                ],
+                dim=-1,
+            )
+        pi = pred["pi"]
+        gt = torch.cat(
+            [
+                data["agent"]["target"][..., : self.output_dim],
+                data["agent"]["target"][..., -1:],
+            ],
+            dim=-1,
+        )
 
-        l2_norm = (torch.norm(traj_propose[..., :self.output_dim] -
-        gt[..., :self.output_dim].unsqueeze(1), p=2, dim=-1) * reg_mask.unsqueeze(1)).sum(dim=-1)
+        l2_norm = (
+            torch.norm(
+                traj_propose[..., : self.output_dim]
+                - gt[..., : self.output_dim].unsqueeze(1),
+                p=2,
+                dim=-1,
+            )
+            * reg_mask.unsqueeze(1)
+        ).sum(dim=-1)
         best_mode = l2_norm.argmin(dim=-1)
         traj_propose_best = traj_propose[torch.arange(traj_propose.size(0)), best_mode]
         traj_refine_best = traj_refine[torch.arange(traj_refine.size(0)), best_mode]
-        reg_loss_propose = self.reg_loss(traj_propose_best,
-                                         gt[..., :self.output_dim + self.output_head]).sum(dim=-1) * reg_mask
-        reg_loss_propose = reg_loss_propose.sum(dim=0) / reg_mask.sum(dim=0).clamp_(min=1)
+        reg_loss_propose = (
+            self.reg_loss(
+                traj_propose_best, gt[..., : self.output_dim + self.output_head]
+            ).sum(dim=-1)
+            * reg_mask
+        )
+        reg_loss_propose = reg_loss_propose.sum(dim=0) / reg_mask.sum(dim=0).clamp_(
+            min=1
+        )
         reg_loss_propose = reg_loss_propose.mean()
-        reg_loss_refine = self.reg_loss(traj_refine_best,
-                                        gt[..., :self.output_dim + self.output_head]).sum(dim=-1) * reg_mask
+        reg_loss_refine = (
+            self.reg_loss(
+                traj_refine_best, gt[..., : self.output_dim + self.output_head]
+            ).sum(dim=-1)
+            * reg_mask
+        )
         reg_loss_refine = reg_loss_refine.sum(dim=0) / reg_mask.sum(dim=0).clamp_(min=1)
         reg_loss_refine = reg_loss_refine.mean()
-        cls_loss = self.cls_loss(pred=traj_refine[:, :, -1:].detach(),
-                                 target=gt[:, -1:, :self.output_dim + self.output_head],
-                                 prob=pi,
-                                 mask=reg_mask[:, -1:]) * cls_mask
+        cls_loss = (
+            self.cls_loss(
+                pred=traj_refine[:, :, -1:].detach(),
+                target=gt[:, -1:, : self.output_dim + self.output_head],
+                prob=pi,
+                mask=reg_mask[:, -1:],
+            )
+            * cls_mask
+        )
         cls_loss = cls_loss.sum() / cls_mask.sum().clamp_(min=1)
-        self.log('val_reg_loss_propose', reg_loss_propose, prog_bar=True, on_step=False, on_epoch=True, batch_size=1,
-                 sync_dist=True)
-        self.log('val_reg_loss_refine', reg_loss_refine, prog_bar=True, on_step=False, on_epoch=True, batch_size=1,
-                 sync_dist=True)
-        self.log('val_cls_loss', cls_loss, prog_bar=True, on_step=False, on_epoch=True, batch_size=1, sync_dist=True)
+        self.log(
+            "val_reg_loss_propose",
+            reg_loss_propose,
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
+            batch_size=1,
+            sync_dist=True,
+        )
+        self.log(
+            "val_reg_loss_refine",
+            reg_loss_refine,
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
+            batch_size=1,
+            sync_dist=True,
+        )
+        self.log(
+            "val_cls_loss",
+            cls_loss,
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
+            batch_size=1,
+            sync_dist=True,
+        )
 
-        if self.dataset == 'argoverse_v2' or self.dataset == 'argoverse_v2_ACL':
-            eval_mask = data['agent']['category'] == 3
+        if self.dataset == "argoverse_v2" or self.dataset == "argoverse_v2_ACL":
+            eval_mask = data["agent"]["category"] == 3
         else:
-            raise ValueError('{} is not a valid dataset'.format(self.dataset))
+            raise ValueError("{} is not a valid dataset".format(self.dataset))
         valid_mask_eval = reg_mask[eval_mask]
-        traj_eval = traj_refine[eval_mask, :, :, :self.output_dim + self.output_head]
+        traj_eval = traj_refine[eval_mask, :, :, : self.output_dim + self.output_head]
         if not self.output_head:
-            traj_2d_with_start_pos_eval = torch.cat([traj_eval.new_zeros((traj_eval.size(0), self.num_modes, 1, 2)),
-                                                     traj_eval[..., :2]], dim=-2)
-            motion_vector_eval = traj_2d_with_start_pos_eval[:, :, 1:] - traj_2d_with_start_pos_eval[:, :, :-1]
-            head_eval = torch.atan2(motion_vector_eval[..., 1], motion_vector_eval[..., 0])
+            traj_2d_with_start_pos_eval = torch.cat(
+                [
+                    traj_eval.new_zeros((traj_eval.size(0), self.num_modes, 1, 2)),
+                    traj_eval[..., :2],
+                ],
+                dim=-2,
+            )
+            motion_vector_eval = (
+                traj_2d_with_start_pos_eval[:, :, 1:]
+                - traj_2d_with_start_pos_eval[:, :, :-1]
+            )
+            head_eval = torch.atan2(
+                motion_vector_eval[..., 1], motion_vector_eval[..., 0]
+            )
             traj_eval = torch.cat([traj_eval, head_eval.unsqueeze(-1)], dim=-1)
         pi_eval = F.softmax(pi[eval_mask], dim=-1)
         gt_eval = gt[eval_mask]
 
-        self.Brier.update(pred=traj_eval[..., :self.output_dim], target=gt_eval[..., :self.output_dim], prob=pi_eval,
-                          valid_mask=valid_mask_eval)
-        self.minADE.update(pred=traj_eval[..., :self.output_dim], target=gt_eval[..., :self.output_dim], prob=pi_eval,
-                           valid_mask=valid_mask_eval)
-        self.minAHE.update(pred=traj_eval, target=gt_eval, prob=pi_eval, valid_mask=valid_mask_eval)
-        self.minFDE.update(pred=traj_eval[..., :self.output_dim], target=gt_eval[..., :self.output_dim], prob=pi_eval,
-                           valid_mask=valid_mask_eval)
-        self.minFHE.update(pred=traj_eval, target=gt_eval, prob=pi_eval, valid_mask=valid_mask_eval)
-        self.MR.update(pred=traj_eval[..., :self.output_dim], target=gt_eval[..., :self.output_dim], prob=pi_eval,
-                       valid_mask=valid_mask_eval)
-        self.RMSEX.update(pred=traj_eval, target=gt_eval, prob=pi_eval, valid_mask=valid_mask_eval)
-        self.RMSEY.update(pred=traj_eval, target=gt_eval, prob=pi_eval, valid_mask=valid_mask_eval)
-        self.log('val_Brier', self.Brier, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
-        self.log('val_minADE', self.minADE, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
-        self.log('val_minAHE', self.minAHE, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
-        self.log('val_minFDE', self.minFDE, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
-        self.log('val_minFHE', self.minFHE, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
-        self.log('val_RMSE_X', self.RMSEX, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
-        self.log('val_RMSE_Y', self.RMSEY, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
-        self.log('val_MR', self.MR, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
+        self.Brier.update(
+            pred=traj_eval[..., : self.output_dim],
+            target=gt_eval[..., : self.output_dim],
+            prob=pi_eval,
+            valid_mask=valid_mask_eval,
+        )
+        self.minADE.update(
+            pred=traj_eval[..., : self.output_dim],
+            target=gt_eval[..., : self.output_dim],
+            prob=pi_eval,
+            valid_mask=valid_mask_eval,
+        )
+        self.minAHE.update(
+            pred=traj_eval, target=gt_eval, prob=pi_eval, valid_mask=valid_mask_eval
+        )
+        self.minFDE.update(
+            pred=traj_eval[..., : self.output_dim],
+            target=gt_eval[..., : self.output_dim],
+            prob=pi_eval,
+            valid_mask=valid_mask_eval,
+        )
+        self.minFHE.update(
+            pred=traj_eval, target=gt_eval, prob=pi_eval, valid_mask=valid_mask_eval
+        )
+        self.MR.update(
+            pred=traj_eval[..., : self.output_dim],
+            target=gt_eval[..., : self.output_dim],
+            prob=pi_eval,
+            valid_mask=valid_mask_eval,
+        )
+        self.RMSEX.update(
+            pred=traj_eval, target=gt_eval, prob=pi_eval, valid_mask=valid_mask_eval
+        )
+        self.RMSEY.update(
+            pred=traj_eval, target=gt_eval, prob=pi_eval, valid_mask=valid_mask_eval
+        )
+        self.log(
+            "val_Brier",
+            self.Brier,
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
+            batch_size=gt_eval.size(0),
+        )
+        self.log(
+            "val_minADE",
+            self.minADE,
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
+            batch_size=gt_eval.size(0),
+        )
+        self.log(
+            "val_minAHE",
+            self.minAHE,
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
+            batch_size=gt_eval.size(0),
+        )
+        self.log(
+            "val_minFDE",
+            self.minFDE,
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
+            batch_size=gt_eval.size(0),
+        )
+        self.log(
+            "val_minFHE",
+            self.minFHE,
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
+            batch_size=gt_eval.size(0),
+        )
+        self.log(
+            "val_RMSE_X",
+            self.RMSEX,
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
+            batch_size=gt_eval.size(0),
+        )
+        self.log(
+            "val_RMSE_Y",
+            self.RMSEY,
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
+            batch_size=gt_eval.size(0),
+        )
+        self.log(
+            "val_MR",
+            self.MR,
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
+            batch_size=gt_eval.size(0),
+        )
         # traj = traj_eval.squeeze()
         # MSE_X = torch.sum((traj_propose_best[..., 0] - gt[eval_mask][:, :, 0])**2)
         # MSE_Y = torch.sum((traj_propose_best[..., 1] - gt[eval_mask][:, :, 1])**2)
@@ -331,136 +563,196 @@ class QCNet(pl.LightningModule):
         # self.log('avg_RMSE_X', self.avg_RMSE_X, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
         # self.log('avg_RMSE_Y', self.avg_RMSE_Y, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
 
-
-
-    def test_step(self,
-                  data,
-                  batch_idx):
+    def test_step(self, data, batch_idx):
         if isinstance(data, Batch):
-            data['agent']['av_index'] += data['agent']['ptr'][:-1]
+            data["agent"]["av_index"] += data["agent"]["ptr"][:-1]
         pred = self(data)
         if self.output_head:
-            traj_refine = torch.cat([pred['loc_refine_pos'][..., :self.output_dim],
-                                     pred['loc_refine_head'],
-                                     pred['scale_refine_pos'][..., :self.output_dim],
-                                     pred['conc_refine_head']], dim=-1)
+            traj_refine = torch.cat(
+                [
+                    pred["loc_refine_pos"][..., : self.output_dim],
+                    pred["loc_refine_head"],
+                    pred["scale_refine_pos"][..., : self.output_dim],
+                    pred["conc_refine_head"],
+                ],
+                dim=-1,
+            )
         else:
-            traj_refine = torch.cat([pred['loc_refine_pos'][..., :self.output_dim],
-                                     pred['scale_refine_pos'][..., :self.output_dim]], dim=-1)
-        pi = pred['pi']
-        if self.dataset == 'argoverse_v2' or self.dataset == 'argoverse_v2_ACL':
-            eval_mask = data['agent']['category'] == 3
+            traj_refine = torch.cat(
+                [
+                    pred["loc_refine_pos"][..., : self.output_dim],
+                    pred["scale_refine_pos"][..., : self.output_dim],
+                ],
+                dim=-1,
+            )
+        pi = pred["pi"]
+        if self.dataset == "argoverse_v2" or self.dataset == "argoverse_v2_ACL":
+            eval_mask = data["agent"]["category"] == 3
         else:
-            raise ValueError('{} is not a valid dataset'.format(self.dataset))
-        origin_eval = data['agent']['position'][eval_mask, self.num_historical_steps - 1]
-        theta_eval = data['agent']['heading'][eval_mask, self.num_historical_steps - 1]
+            raise ValueError("{} is not a valid dataset".format(self.dataset))
+        origin_eval = data["agent"]["position"][
+            eval_mask, self.num_historical_steps - 1
+        ]
+        theta_eval = data["agent"]["heading"][eval_mask, self.num_historical_steps - 1]
         cos, sin = theta_eval.cos(), theta_eval.sin()
         rot_mat = torch.zeros(eval_mask.sum(), 2, 2, device=self.device)
         rot_mat[:, 0, 0] = cos
         rot_mat[:, 0, 1] = sin
         rot_mat[:, 1, 0] = -sin
         rot_mat[:, 1, 1] = cos
-        traj_eval = torch.matmul(traj_refine[eval_mask, :, :, :2],
-                                 rot_mat.unsqueeze(1)) + origin_eval[:, :2].reshape(-1, 1, 1, 2)
+        traj_eval = torch.matmul(
+            traj_refine[eval_mask, :, :, :2], rot_mat.unsqueeze(1)
+        ) + origin_eval[:, :2].reshape(-1, 1, 1, 2)
         pi_eval = F.softmax(pi[eval_mask], dim=-1)
 
         traj_eval = traj_eval.cpu().numpy()
         pi_eval = pi_eval.cpu().numpy()
-        if self.dataset == 'argoverse_v2' or self.dataset == 'argoverse_v2_ACL':
-            eval_id = list(compress(list(chain(*data['agent']['id'])), eval_mask))
+        if self.dataset == "argoverse_v2" or self.dataset == "argoverse_v2_ACL":
+            eval_id = list(compress(list(chain(*data["agent"]["id"])), eval_mask))
             if isinstance(data, Batch):
                 for i in range(data.num_graphs):
-                    self.test_predictions[data['scenario_id'][i]] = (pi_eval[i], {eval_id[i]: traj_eval[i]})
+                    self.test_predictions[data["scenario_id"][i]] = (
+                        pi_eval[i],
+                        {eval_id[i]: traj_eval[i]},
+                    )
             else:
-                self.test_predictions[data['scenario_id']] = (pi_eval[0], {eval_id[0]: traj_eval[0]})
+                self.test_predictions[data["scenario_id"]] = (
+                    pi_eval[0],
+                    {eval_id[0]: traj_eval[0]},
+                )
         else:
-            raise ValueError('{} is not a valid dataset'.format(self.dataset))
+            raise ValueError("{} is not a valid dataset".format(self.dataset))
 
     def on_test_end(self):
-        if self.dataset == 'argoverse_v2' or self.dataset == 'argoverse_v2_ACL':
+        if self.dataset == "argoverse_v2" or self.dataset == "argoverse_v2_ACL":
             ChallengeSubmission(self.test_predictions).to_parquet(
-                Path(self.submission_dir) / f'{self.submission_file_name}.parquet')
+                Path(self.submission_dir) / f"{self.submission_file_name}.parquet"
+            )
         else:
-            raise ValueError('{} is not a valid dataset'.format(self.dataset))
+            raise ValueError("{} is not a valid dataset".format(self.dataset))
 
     def configure_optimizers(self):
         decay = set()
         no_decay = set()
-        whitelist_weight_modules = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.MultiheadAttention, nn.LSTM,
-                                    nn.LSTMCell, nn.GRU, nn.GRUCell)
-        blacklist_weight_modules = (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d, nn.LayerNorm, nn.Embedding)
+        whitelist_weight_modules = (
+            nn.Linear,
+            nn.Conv1d,
+            nn.Conv2d,
+            nn.Conv3d,
+            nn.MultiheadAttention,
+            nn.LSTM,
+            nn.LSTMCell,
+            nn.GRU,
+            nn.GRUCell,
+        )
+        blacklist_weight_modules = (
+            nn.BatchNorm1d,
+            nn.BatchNorm2d,
+            nn.BatchNorm3d,
+            nn.LayerNorm,
+            nn.Embedding,
+        )
         for module_name, module in self.named_modules():
             for param_name, param in module.named_parameters():
-                full_param_name = '%s.%s' % (module_name, param_name) if module_name else param_name
-                if 'bias' in param_name:
+                full_param_name = (
+                    "%s.%s" % (module_name, param_name) if module_name else param_name
+                )
+                if "bias" in param_name:
                     no_decay.add(full_param_name)
-                elif 'weight' in param_name:
+                elif "weight" in param_name:
                     if isinstance(module, whitelist_weight_modules):
                         decay.add(full_param_name)
                     elif isinstance(module, blacklist_weight_modules):
                         no_decay.add(full_param_name)
-                elif not ('weight' in param_name or 'bias' in param_name):
+                elif not ("weight" in param_name or "bias" in param_name):
                     no_decay.add(full_param_name)
-        param_dict = {param_name: param for param_name, param in self.named_parameters()}
+        param_dict = {
+            param_name: param for param_name, param in self.named_parameters()
+        }
         inter_params = decay & no_decay
         union_params = decay | no_decay
         assert len(inter_params) == 0
         assert len(param_dict.keys() - union_params) == 0
 
         optim_groups = [
-            {"params": [param_dict[param_name] for param_name in sorted(list(decay))],
-             "weight_decay": self.weight_decay},
-            {"params": [param_dict[param_name] for param_name in sorted(list(no_decay))],
-             "weight_decay": 0.0},
+            {
+                "params": [
+                    param_dict[param_name] for param_name in sorted(list(decay))
+                ],
+                "weight_decay": self.weight_decay,
+            },
+            {
+                "params": [
+                    param_dict[param_name] for param_name in sorted(list(no_decay))
+                ],
+                "weight_decay": 0.0,
+            },
         ]
 
-        optimizer = torch.optim.AdamW(optim_groups, lr=self.lr, weight_decay=self.weight_decay)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=self.T_max, eta_min=0.0)
+        optimizer = torch.optim.AdamW(
+            optim_groups, lr=self.lr, weight_decay=self.weight_decay
+        )
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer=optimizer, T_max=self.T_max, eta_min=0.0
+        )
         return [optimizer], [scheduler]
-    
+
     def on_epoch_end(self):
         # 훈련 및 검증이 끝난 후에 파일에 결과 저장
-        self.save_metrics('/home/user/QCNet/validation_metrics.txt', self.validation_metrics)
+        self.save_metrics(
+            "/home/user/QCNet/validation_metrics.txt", self.validation_metrics
+        )
 
     def save_metrics(self, filename, metrics):
-        with open(filename, 'w') as f:
+        with open(filename, "w") as f:
             for item in metrics:
-                f.write(f'MSE_X: {item[0]}, MSE_Y: {item[1]}, Result: {item[2]}\n')
+                f.write(f"MSE_X: {item[0]}, MSE_Y: {item[1]}, Result: {item[2]}\n")
 
-    def save_values(self, pos_x,pos_y,traj_values_x, gt_values_x,traj_values_y, gt_values_y):
+    def save_values(
+        self, pos_x, pos_y, traj_values_x, gt_values_x, traj_values_y, gt_values_y
+    ):
         with open("/home/user/QCNet/0412_value.txt", "a") as f:
-            for pos_x,pos_y,traj_val_x, gt_val_x,traj_val_y, gt_val_y in zip(pos_x.flatten(),pos_y.flatten(),traj_values_x.flatten(), gt_values_x.flatten(),traj_values_y.flatten(), gt_values_y.flatten()):
-                f.write(f"pos_x:{pos_x},pos_y:{pos_y},traj_x: {traj_val_x}, gt_x: {gt_val_x},traj_y: {traj_val_y}, gt_y: {gt_val_y}\n")
+            for pos_x, pos_y, traj_val_x, gt_val_x, traj_val_y, gt_val_y in zip(
+                pos_x.flatten(),
+                pos_y.flatten(),
+                traj_values_x.flatten(),
+                gt_values_x.flatten(),
+                traj_values_y.flatten(),
+                gt_values_y.flatten(),
+            ):
+                f.write(
+                    f"pos_x:{pos_x},pos_y:{pos_y},traj_x: {traj_val_x}, gt_x: {gt_val_x},traj_y: {traj_val_y}, gt_y: {gt_val_y}\n"
+                )
 
     @staticmethod
     def add_model_specific_args(parent_parser):
-        parser = parent_parser.add_argument_group('QCNet')
-        parser.add_argument('--dataset', type=str, required=True)
-        parser.add_argument('--input_dim', type=int, default=2)
-        parser.add_argument('--hidden_dim', type=int, default=128)
-        parser.add_argument('--output_dim', type=int, default=2)
-        parser.add_argument('--output_head', action='store_true')
-        parser.add_argument('--num_historical_steps', type=int, required=True)
-        parser.add_argument('--num_future_steps', type=int, required=True)
-        parser.add_argument('--num_modes', type=int, default=6)
-        parser.add_argument('--num_recurrent_steps', type=int, required=True)
-        parser.add_argument('--num_freq_bands', type=int, default=64)
-        parser.add_argument('--num_map_layers', type=int, default=1)
-        parser.add_argument('--num_agent_layers', type=int, default=2)
-        parser.add_argument('--num_dec_layers', type=int, default=2)
-        parser.add_argument('--num_heads', type=int, default=8)
-        parser.add_argument('--head_dim', type=int, default=16)
-        parser.add_argument('--dropout', type=float, default=0.1)
-        parser.add_argument('--pl2pl_radius', type=float, required=True)
-        parser.add_argument('--time_span', type=int, default=None)
-        parser.add_argument('--pl2a_radius', type=float, required=True)
-        parser.add_argument('--a2a_radius', type=float, required=True)
-        parser.add_argument('--num_t2m_steps', type=int, default=None)
-        parser.add_argument('--pl2m_radius', type=float, required=True)
-        parser.add_argument('--a2m_radius', type=float, required=True)
-        parser.add_argument('--lr', type=float, default=5e-4)
-        parser.add_argument('--weight_decay', type=float, default=1e-4)
-        parser.add_argument('--T_max', type=int, default=64)
-        parser.add_argument('--submission_dir', type=str, default='./')
-        parser.add_argument('--submission_file_name', type=str, default='submission')
+        parser = parent_parser.add_argument_group("QCNet")
+        parser.add_argument("--dataset", type=str, required=True)
+        parser.add_argument("--input_dim", type=int, default=2)
+        parser.add_argument("--hidden_dim", type=int, required=True)  # 128
+        parser.add_argument("--output_dim", type=int, default=2)
+        parser.add_argument("--output_head", action="store_true")
+        parser.add_argument("--num_historical_steps", type=int, required=True)
+        parser.add_argument("--num_future_steps", type=int, required=True)
+        parser.add_argument("--num_modes", type=int, default=6)
+        parser.add_argument("--num_recurrent_steps", type=int, required=True)
+        parser.add_argument("--num_freq_bands", type=int, required=True)  # 64
+        parser.add_argument("--num_map_layers", type=int, default=1)
+        parser.add_argument("--num_agent_layers", type=int, default=2)
+        parser.add_argument("--num_dec_layers", type=int, default=2)
+        parser.add_argument("--num_heads", type=int, required=True)  # 8
+        parser.add_argument("--head_dim", type=int, required=True)  # 16
+        parser.add_argument("--dropout", type=float, default=0.1)
+        parser.add_argument("--pl2pl_radius", type=float, required=True)
+        parser.add_argument("--time_span", type=int, default=None)
+        parser.add_argument("--pl2a_radius", type=float, required=True)
+        parser.add_argument("--a2a_radius", type=float, required=True)
+        parser.add_argument("--num_t2m_steps", type=int, default=None)
+        parser.add_argument("--pl2m_radius", type=float, required=True)
+        parser.add_argument("--a2m_radius", type=float, required=True)
+        parser.add_argument("--lr", type=float, default=5e-4)
+        parser.add_argument("--weight_decay", type=float, default=1e-4)
+        parser.add_argument("--T_max", type=int, default=64)
+        parser.add_argument("--submission_dir", type=str, default="./")
+        parser.add_argument("--submission_file_name", type=str, default="submission")
         return parent_parser
