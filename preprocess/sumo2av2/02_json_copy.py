@@ -38,6 +38,8 @@ def parse_args():
 
 def copy_json_to_subfolders_with_new_name(source_file_path, dest_folder):
     # 대상 폴더의 모든 하위 폴더 목록을 가져오기
+    if not os.path.exists(dest_folder):
+        os.makedirs(dest_folder)
     subfolders = [os.path.join(dest_folder, name) for name in os.listdir(dest_folder) if os.path.isdir(os.path.join(dest_folder, name))]
 
     # 원본 JSON 파일을 각 하위 폴더로 복사하며 파일명 변경
