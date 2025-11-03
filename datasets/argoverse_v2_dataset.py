@@ -262,16 +262,20 @@ class ArgoverseV2Dataset(Dataset):
         return df["city"].values[0]
 
     def get_agent_features(self, df: pd.DataFrame) -> Dict[str, Any]:
-        if not self.predict_unseen_agents:  # filter out agents that are unseen during the historical time steps
-            historical_df = df[df['timestep'] < self.num_historical_steps]
-            agent_ids = list(historical_df['track_id'].unique())
-            df = df[df['track_id'].isin(agent_ids)]
+        if (
+            not self.predict_unseen_agents
+        ):  # filter out agents that are unseen during the historical time steps
+            historical_df = df[df["timestep"] < self.num_historical_steps]
+            agent_ids = list(historical_df["track_id"].unique())
+            #### for sort - inference
+            agent_ids.sort() ## add sort 
+            df = df[df["track_id"].isin(agent_ids)]
         else:
-            agent_ids = list(df['track_id'].unique())
+            agent_ids = sorted(list(df["track_id"].unique()))
 
         num_agents = len(agent_ids)
         # av_idx = agent_ids.index('AV')
-        av_idx = 5000
+        av_idx = 100000
 
         # initialization
         valid_mask = torch.zeros(num_agents, self.num_steps, dtype=torch.bool)
